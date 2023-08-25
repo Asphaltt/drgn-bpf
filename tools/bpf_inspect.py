@@ -1,5 +1,6 @@
 #!/usr/bin/env drgn
 # Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright Leon Hwang
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import argparse
@@ -112,14 +113,14 @@ def get_tramp_progs(bpf_prog):
                 yield tramp_aux.prog
 
 
-def show_prog(bpf_prog, index):
+def show_prog(bpf_prog, prefix):
     type_ = BpfProgType(bpf_prog.type).name
     name = get_prog_name(bpf_prog)
     ksym = bpf_prog.aux.ksym.name.string_().decode()
     ptr = bpf_prog.aux.ksym.start.value_()
 
     ksym_desc = f"{ksym} {ptr:#x}" if ptr else ""
-    print(f"\t{index:>3}: {type_:16} {name:16} {ksym_desc}")
+    print(f"\t{prefix:>3}: {type_:16} {name:16} {ksym_desc}")
 
 
 def list_bpf_progs(args):
@@ -180,7 +181,7 @@ def list_bpf_links(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="drgn script to list BPF programs or maps and their properties unavailable via kernel API"
+        description="drgn script to list BPF programs or maps or links and their properties unavailable via kernel API"
     )
 
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
