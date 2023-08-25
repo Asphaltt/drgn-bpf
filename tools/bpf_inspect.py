@@ -98,7 +98,9 @@ def show_prog(bpf_prog, index):
     name = get_prog_name(bpf_prog)
     ksym = bpf_prog.aux.ksym.name.string_().decode()
     ptr = bpf_prog.aux.ksym.start.value_()
-    print(f"\t{index:>3}: {type_:16} {name:16} {ksym} {ptr:#x}")
+
+    ksym_desc = f"{ksym} {ptr:#x}" if ptr else ""
+    print(f"\t{index:>3}: {type_:16} {name:16} {ksym_desc}")
 
 
 def list_bpf_progs(args):
@@ -114,7 +116,8 @@ def list_bpf_progs(args):
         if linked:
             linked = f" linked:[{linked}]"
 
-        print(f"{id_:>6}: {type_:32} {name:32} {ksym} {ptr:#x} {linked}")
+        ksym_desc = f"{ksym} {ptr:#x}" if ptr else ""
+        print(f"{id_:>6}: {type_:32} {name:32} {ksym_desc} {linked}")
 
         if dst_prog:
             show_prog(dst_prog, "target prog")
