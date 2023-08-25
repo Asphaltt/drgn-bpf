@@ -1,6 +1,8 @@
 drgn
 ====
 
+This is an eBPF enhanced fork of drgn. The original README is below.
+
 .. image:: https://img.shields.io/pypi/v/drgn
     :target: https://pypi.org/project/drgn/
     :alt: PyPI

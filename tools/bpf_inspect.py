@@ -4,12 +4,19 @@
 
 import argparse
 
+from drgn import container_of
 from drgn.helpers.common.type import enum_type_to_class
-from drgn.helpers.linux import bpf_map_for_each, bpf_prog_for_each, hlist_for_each_entry
+from drgn.helpers.linux import (
+    bpf_map_for_each,
+    bpf_prog_for_each,
+    bpf_link_for_each,
+    hlist_for_each_entry,
+)
 
 BpfMapType = enum_type_to_class(prog.type("enum bpf_map_type"), "BpfMapType")
 BpfProgType = enum_type_to_class(prog.type("enum bpf_prog_type"), "BpfProgType")
 BpfAttachType = enum_type_to_class(prog.type("enum bpf_attach_type"), "BpfAttachType")
+BpfLinkType = enum_type_to_class(prog.type("enum bpf_link_type"), "BpfLinkType")
 
 
 def get_btf_name(btf, btf_id):
@@ -86,17 +93,36 @@ def get_tramp_progs(bpf_prog):
                 yield tramp_aux.prog
 
 
+def show_prog(bpf_prog, index):
+    type_ = BpfProgType(bpf_prog.type).name
+    name = get_prog_name(bpf_prog)
+    ksym = bpf_prog.aux.ksym.name.string_().decode()
+    ptr = bpf_prog.aux.ksym.start.value_()
+    print(f"\t{index:>3}: {type_:16} {name:16} {ksym} {ptr:#x}")
+
+
 def list_bpf_progs(args):
     for bpf_prog in bpf_prog_for_each(prog):
         id_ = bpf_prog.aux.id.value_()
         type_ = BpfProgType(bpf_prog.type).name
         name = get_prog_name(bpf_prog)
+        ksym = bpf_prog.aux.ksym.name.string_().decode()
+        ptr = bpf_prog.aux.ksym.start.value_()
+        dst_prog = bpf_prog.aux.dst_prog
 
         linked = ", ".join([get_linked_func(p) for p in get_tramp_progs(bpf_prog)])
         if linked:
             linked = f" linked:[{linked}]"
 
-        print(f"{id_:>6}: {type_:32} {name:32} {linked}")
+        print(f"{id_:>6}: {type_:32} {name:32} {ksym} {ptr:#x} {linked}")
+
+        if dst_prog:
+            show_prog(dst_prog, "target prog")
+
+        func_info_cnt = bpf_prog.aux.func_info_cnt
+        if func_info_cnt > 1:
+            for i in range(0, func_info_cnt):
+                show_prog(bpf_prog.aux.func[i], i)
 
 
 def list_bpf_maps(args):
@@ -106,6 +132,28 @@ def list_bpf_maps(args):
         name = map_.name.string_().decode()
 
         print(f"{id_:>6}: {type_:32} {name}")
+
+
+def list_bpf_links(args):
+    for link_ in bpf_link_for_each(prog):
+        id_ = link_.id.value_()
+        type_ = BpfLinkType(link_.type).name
+        linked_prog = link_.prog
+
+        print(f"{id_:>6}: {type_:32}")
+        if linked_prog:
+            show_prog(linked_prog, "linked prog")
+
+        if type_ == "BPF_LINK_TYPE_TRACING":
+            tracing_link = container_of(
+                link_, prog.type("struct bpf_tracing_link"), "link"
+            )
+            tgt_prog = tracing_link.tgt_prog
+            if tgt_prog:
+                show_prog(tgt_prog, "target prog")
+            ext_prog = tracing_link.trampoline.extension_prog
+            if ext_prog:
+                show_prog(ext_prog, "extend prog")
 
 
 def main():
@@ -121,6 +169,9 @@ def main():
 
     map_parser = subparsers.add_parser("map", aliases=["m"], help="list BPF maps")
     map_parser.set_defaults(func=list_bpf_maps)
+
+    link_parser = subparsers.add_parser("link", aliases=["l"], help="list BPF links")
+    link_parser.set_defaults(func=list_bpf_links)
 
     args = parser.parse_args()
     args.func(args)
