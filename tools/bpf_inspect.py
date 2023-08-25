@@ -4,6 +4,7 @@
 
 import argparse
 
+import drgn
 from drgn import container_of
 from drgn.helpers.common.type import enum_type_to_class
 from drgn.helpers.linux import (
@@ -17,6 +18,24 @@ BpfMapType = enum_type_to_class(prog.type("enum bpf_map_type"), "BpfMapType")
 BpfProgType = enum_type_to_class(prog.type("enum bpf_prog_type"), "BpfProgType")
 BpfAttachType = enum_type_to_class(prog.type("enum bpf_attach_type"), "BpfAttachType")
 BpfLinkType = enum_type_to_class(prog.type("enum bpf_link_type"), "BpfLinkType")
+
+
+def is_version_ge_0_0_23():
+    """Check if drgn version is 0.0.23 or greater."""
+    version = drgn.internal.version.__version__.split("+")[0]
+    version_nums = [int(x) for x in version.split(".")]
+    major, minor, patch = version_nums
+    return major > 0 or minor > 0 or patch >= 23
+
+
+def __run_interactive(args):
+    if not is_version_ge_0_0_23():
+        print("Interactive mode requires drgn 0.0.23+")
+        exit(1)
+
+    from drgn.cli import run_interactive
+
+    run_interactive(prog)
 
 
 def get_btf_name(btf, btf_id):
@@ -175,6 +194,11 @@ def main():
 
     link_parser = subparsers.add_parser("link", aliases=["l"], help="list BPF links")
     link_parser.set_defaults(func=list_bpf_links)
+
+    interact_parser = subparsers.add_parser(
+        "interact", aliases=["i"], help="start interactive shell, requires 0.0.23+ drgn"
+    )
+    interact_parser.set_defaults(func=__run_interactive)
 
     args = parser.parse_args()
     args.func(args)
