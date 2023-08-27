@@ -148,13 +148,37 @@ def list_bpf_progs(args):
                 show_prog(bpf_prog.aux.func[i], i)
 
 
+def show_prog_array_map(map_):
+    array = container_of(map_, prog.type("struct bpf_array"), "map")
+    for i in range(0, map_.max_entries):
+        prog_ = array.ptrs[i]
+        if prog_:
+            bpf_prog = drgn.cast("struct bpf_prog *", prog_)
+            show_prog(bpf_prog, f"progs[{i}]")
+
+
+def show_map_internals(map_):
+    owner_type = BpfProgType(map_.owner.type).name
+    owner_jited = map_.owner.jited.value_()
+    type_ = BpfMapType(map_.map_type).name
+
+    if type_ == "BPF_MAP_TYPE_PROG_ARRAY":
+        print(f"\towner bpf prog: {owner_type} jited:{owner_jited}")
+        show_prog_array_map(map_)
+
+
 def list_bpf_maps(args):
+    show_internals = args.D
+
     for map_ in bpf_map_for_each(prog):
         id_ = map_.id.value_()
         type_ = BpfMapType(map_.map_type).name
         name = map_.name.string_().decode()
 
         print(f"{id_:>6}: {type_:32} {name}")
+
+        if show_internals:
+            show_map_internals(map_)
 
 
 def list_bpf_links(args):
@@ -192,6 +216,7 @@ def main():
 
     map_parser = subparsers.add_parser("map", aliases=["m"], help="list BPF maps")
     map_parser.set_defaults(func=list_bpf_maps)
+    map_parser.add_argument("-D", action="store_true", help="show map internal details")
 
     link_parser = subparsers.add_parser("link", aliases=["l"], help="list BPF links")
     link_parser.set_defaults(func=list_bpf_links)
