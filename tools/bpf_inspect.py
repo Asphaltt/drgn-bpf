@@ -157,13 +157,32 @@ def show_prog_array_map(map_):
             show_prog(bpf_prog, f"progs[{i}]")
 
 
+def get_owner_info(map_):
+    try:
+        type_ = BpfProgType(map_.owner.type).name
+        jited = map_.owner.jited.value_()
+        return f"{type_} jited:{jited}"
+    except AttributeError:
+        pass
+
+    array = container_of(map_, prog.type("struct bpf_array"), "map")
+    try:
+        type_ = BpfProgType(array.aux.owner.type).name
+        jited = array.aux.owner.jited.value_()
+        return f"{type_} jited:{jited}"
+    except AttributeError:
+        pass
+
+    return ""
+
+
 def show_map_internals(map_):
-    owner_type = BpfProgType(map_.owner.type).name
-    owner_jited = map_.owner.jited.value_()
     type_ = BpfMapType(map_.map_type).name
 
     if type_ == "BPF_MAP_TYPE_PROG_ARRAY":
-        print(f"\towner bpf prog: {owner_type} jited:{owner_jited}")
+        owner = get_owner_info(map_)
+        if owner:
+            print(f"\towner bpf prog: {owner}")
         show_prog_array_map(map_)
 
 
