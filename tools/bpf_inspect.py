@@ -113,14 +113,36 @@ def get_tramp_progs(bpf_prog):
                 yield tramp_aux.prog
 
 
+def get_trampoline_flags(flags):
+    tramp_flags = [
+        "BPF_TRAMP_F_RESTORE_REGS",
+        "BPF_TRAMP_F_CALL_ORIG",
+        "BPF_TRAMP_F_SKIP_FRAME",
+        "BPF_TRAMP_F_IP_ARG",
+        "BPF_TRAMP_F_RET_FENTRY_RET",
+        "BPF_TRAMP_F_ORIG_STACK",
+        "BPF_TRAMP_F_SHARE_IPMODIFY",
+        "BPF_TRAMP_F_TAIL_CALL_CTX",
+    ]
+
+    f = list()
+    for i in range(0, len(tramp_flags)):
+        if flags & (1 << i):
+            f.append(tramp_flags[i])
+
+    return "|".join(f)
+
+
 def show_prog(bpf_prog, prefix):
     type_ = BpfProgType(bpf_prog.type).name
     name = get_prog_name(bpf_prog)
     ksym = bpf_prog.aux.ksym.name.string_().decode()
     ptr = bpf_prog.aux.ksym.start.value_()
+    tail_call_reachable = bpf_prog.aux.tail_call_reachable.value_()
 
-    ksym_desc = f"{ksym} {ptr:#x}" if ptr else ""
-    print(f"\t{prefix:>3}: {type_:16} {name:16} {ksym_desc}")
+    ksym_desc = f" {ksym} {ptr:#x}" if ptr else ""
+    tail_call_desc = " tail_call_reachable" if tail_call_reachable else ""
+    print(f"\t{prefix:>3}: {type_:16} {name:16}{ksym_desc}{tail_call_desc}")
 
 
 def list_bpf_progs(args):
@@ -131,16 +153,22 @@ def list_bpf_progs(args):
         ksym = bpf_prog.aux.ksym.name.string_().decode()
         ptr = bpf_prog.aux.ksym.start.value_()
         dst_prog = bpf_prog.aux.dst_prog
+        dst_tramp = bpf_prog.aux.dst_trampoline
+        tail_call_reachable = bpf_prog.aux.tail_call_reachable.value_()
 
         linked = ", ".join([get_linked_func(p) for p in get_tramp_progs(bpf_prog)])
         if linked:
             linked = f" linked:[{linked}]"
 
-        ksym_desc = f"{ksym} {ptr:#x}" if ptr else ""
-        print(f"{id_:>6}: {type_:32} {name:32} {ksym_desc} {linked}")
+        ksym_desc = f" {ksym} {ptr:#x}" if ptr else ""
+        tail_call_desc = " tail_call_reachable" if tail_call_reachable else ""
+        print(f"{id_:>6}: {type_:32} {name:32}{ksym_desc}{linked}{tail_call_desc}")
 
         if dst_prog:
             show_prog(dst_prog, "target prog")
+        if dst_tramp:
+            tramp_flags = dst_tramp.flags.value_()
+            print(f"\ttarget trampoline: {get_trampoline_flags(tramp_flags)}")
 
         func_info_cnt = bpf_prog.aux.func_info_cnt
         if func_info_cnt > 1:
@@ -220,6 +248,8 @@ def list_bpf_links(args):
             ext_prog = tracing_link.trampoline.extension_prog
             if ext_prog:
                 show_prog(ext_prog, "extend prog")
+            tramp_flags = tracing_link.trampoline.flags.value_()
+            print(f"\ttrampoline flags: {get_trampoline_flags(tramp_flags)}")
 
 
 def main():
